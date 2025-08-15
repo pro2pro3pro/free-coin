@@ -1,0 +1,52 @@
+<!doctype html><html><head>
+<meta charset="utf-8"><title>Claim Logs</title>
+<link rel="stylesheet" href="/public/style.css">
+</head><body>
+<div class="container">
+  <h1>Claim Logs</h1>
+  <form method="get" action="/admin/logs" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <input type="text"   name="user_id"  placeholder="User ID" value="<%= q.user_id %>"/>
+    <select name="platform">
+      <option value="">--Platform--</option>
+      <option value="yeumoney" <%= q.platform==="yeumoney"?"selected":"" %>>yeumoney</option>
+      <option value="link4m"   <%= q.platform==="link4m"?"selected":"" %>>link4m</option>
+      <option value="bbmkts"   <%= q.platform==="bbmkts"?"selected":"" %>>bbmkts</option>
+    </select>
+    <select name="status">
+      <option value="">--Status--</option>
+      <option value="generated" <%= q.status==="generated"?"selected":"" %>>generated</option>
+      <option value="awarded"   <%= q.status==="awarded"?"selected":"" %>>awarded</option>
+      <option value="rejected"  <%= q.status==="rejected"?"selected":"" %>>rejected</option>
+    </select>
+    <input type="date" name="from" value="<%= q.from %>"/>
+    <input type="date" name="to" value="<%= q.to %>"/>
+    <div style="grid-column:1/-1">
+      <button type="submit">Lọc</button>
+      <a href="/admin" style="margin-left:8px">⬅ Trở lại Admin</a>
+    </div>
+  </form>
+
+  <table style="width:100%;margin-top:16px;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th>ID</th><th>User</th><th>Date</th><th>Platform</th><th>SubID</th><th>Status</th><th>Coins</th><th>IP</th><th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.forEach(r=>{ %>
+        <tr>
+          <td><%= r.id %></td>
+          <td><%= r.user_id %></td>
+          <td><%= r.date %></td>
+          <td><%= r.platform %></td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= r.subid %></td>
+          <td><%= r.status %></td>
+          <td><%= r.coins_awarded %></td>
+          <td><%= r.ip || "" %></td>
+          <td><%= r.created_at %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+</body></html>

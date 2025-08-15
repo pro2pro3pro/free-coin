@@ -1,0 +1,17 @@
+<!doctype html><html><head>
+<meta charset="utf-8"><title>Admin</title>
+<link rel="stylesheet" href="/public/style.css">
+</head><body>
+<div class="container">
+  <h1>Admin Dashboard</h1>
+  <p>Đăng nhập thành công.</p>
+  <form action="/auth/logout" method="post"><button>Logout</button></form>
+  <hr/>
+  <p><a href="/admin/logs">📜 Xem lịch sử claim</a></p>
+  <h2>Tra cứu người dùng</h2>
+  <form action="/admin/lookup" method="post">
+    <input type="text" name="user_id" placeholder="Discord User ID" required />
+    <button type="submit">Xem</button>
+  </form>
+</div>
+</body></html>
