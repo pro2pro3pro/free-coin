@@ -1,0 +1,5 @@
+body { font-family: system-ui, Arial, sans-serif; background:#0f1222; color:#f0f3ff; margin:0; padding:20px }
+.container { max-width:900px; margin:20px auto; background:#171a2f; padding:24px; border-radius:12px }
+input, select, button { padding:8px 10px; margin:6px 0; border-radius:8px; border:0 }
+button { background:#5865F2; color:white }
+table, th, td { border:1px solid #2b2e44; padding:8px; }
