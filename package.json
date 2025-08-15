@@ -1,0 +1,14 @@
+{
+  "name": "discordcoinsuite",
+  "version": "1.0.0",
+  "description": "Discord Coin Suite Bot + Web",
+  "main": "src/web.js",
+  "scripts": {
+    "start": "node src/web.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "discord.js": "^14.14.1",
+    "ejs": "^3.1.9"
+  }
+}
