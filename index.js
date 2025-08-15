@@ -159,7 +159,6 @@ client.on("interactionCreate", async(interaction)=>{
 });
 
 // Register commands
-import { REST } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 async function registerOnBoot(){
