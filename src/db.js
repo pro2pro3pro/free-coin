@@ -7,13 +7,14 @@ const firstInit = !fs.existsSync(dbPath);
 export const db = new Database(dbPath);
 if (firstInit) db.pragma("journal_mode = WAL");
 
+// Schema: bỏ DEFAULT datetime("now"), chỉ giữ TEXT NOT NULL
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   user_id TEXT PRIMARY KEY,
   normal_coin INTEGER NOT NULL DEFAULT 0,
   vip_coin INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime("now")),
-  updated_at TEXT NOT NULL DEFAULT (datetime("now"))
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS claims (
@@ -25,7 +26,7 @@ CREATE TABLE IF NOT EXISTS claims (
   status TEXT NOT NULL DEFAULT "generated",
   coins_awarded INTEGER NOT NULL DEFAULT 0,
   ip TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime("now")),
+  created_at TEXT NOT NULL,
   UNIQUE(user_id, date, platform, subid)
 );
 
@@ -36,7 +37,7 @@ CREATE TABLE IF NOT EXISTS daily_links (
   platform TEXT NOT NULL,
   link TEXT NOT NULL,
   subid TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime("now")),
+  created_at TEXT NOT NULL,
   UNIQUE(user_id, date, platform)
 );
 
@@ -47,7 +48,10 @@ CREATE TABLE IF NOT EXISTS meta (
 `);
 
 export function upsertUser(userId) {
-  db.prepare("INSERT OR IGNORE INTO users (user_id) VALUES (?)").run(userId);
+  db.prepare(`
+    INSERT OR IGNORE INTO users (user_id, normal_coin, vip_coin, created_at, updated_at)
+    VALUES (?, 0, 0, datetime('now'), datetime('now'))
+  `).run(userId);
 }
 
 export function getUser(userId) {
@@ -76,7 +80,10 @@ export function addVipCoin(userId, amount) {
 }
 
 export function insertClaimGenerated(userId, date, platform, subid) {
-  return db.prepare("INSERT OR IGNORE INTO claims (user_id,date,platform,subid,status) VALUES (?,?,?,?, 'generated')").run(userId,date,platform,subid);
+  return db.prepare(`
+    INSERT OR IGNORE INTO claims (user_id, date, platform, subid, status, created_at)
+    VALUES (?, ?, ?, ?, 'generated', datetime('now'))
+  `).run(userId, date, platform, subid);
 }
 
 export function getClaimBySubid(subid) {
@@ -99,16 +106,16 @@ export function getDailyLink(userId, date, platform) {
 }
 
 export function setDailyLink(userId, date, platform, link, subid) {
-  return db.prepare("INSERT OR REPLACE INTO daily_links (user_id,date,platform,link,subid) VALUES (?,?,?,?,?)").run(userId,date,platform,link,subid);
+  return db.prepare("INSERT OR REPLACE INTO daily_links (user_id, date, platform, link, subid, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run(userId, date, platform, link, subid);
 }
 
 export function hasAwardedOnIP(ip, date, platform) {
-  const r = db.prepare("SELECT COUNT(*) c FROM claims WHERE ip = ? AND date = ? AND platform = ? AND status='awarded'").get(ip,date,platform);
+  const r = db.prepare("SELECT COUNT(*) c FROM claims WHERE ip = ? AND date = ? AND platform = ? AND status='awarded'").get(ip, date, platform);
   return r ? r.c > 0 : false;
 }
 
 export function sumCoinsForUserBetween(userId, startDate, endDate) {
-  const r = db.prepare("SELECT COALESCE(SUM(coins_awarded),0) s FROM claims WHERE user_id=? AND status='awarded' AND date BETWEEN ? AND ?").get(userId,startDate,endDate);
+  const r = db.prepare("SELECT COALESCE(SUM(coins_awarded),0) s FROM claims WHERE user_id=? AND status='awarded' AND date BETWEEN ? AND ?").get(userId, startDate, endDate);
   return r ? r.s : 0;
 }
 
