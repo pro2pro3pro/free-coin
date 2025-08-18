@@ -1,181 +1,105 @@
-// ======================= IMPORTS =======================
-import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
 import express from "express";
+import sqlite3 from "better-sqlite3";
+import fetch from "node-fetch";
 import cron from "node-cron";
-import Database from "better-sqlite3";
-import path from "path";
-import fs from "fs";
 
-// ======================= DATABASE ======================
-const dbPath = path.join(process.cwd(), "data.db");
-const firstInit = !fs.existsSync(dbPath);
-export const db = new Database(dbPath);
-if (firstInit) db.pragma("journal_mode = WAL");
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  user_id TEXT PRIMARY KEY,
-  normal_coin INTEGER NOT NULL DEFAULT 0,
-  vip_coin INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime("now")),
-  updated_at TEXT NOT NULL DEFAULT (datetime("now"))
-);
-
-CREATE TABLE IF NOT EXISTS claims (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  platform TEXT NOT NULL,
-  subid TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT "generated",
-  coins_awarded INTEGER NOT NULL DEFAULT 0,
-  ip TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime("now")),
-  UNIQUE(user_id, date, platform, subid)
-);
-
-CREATE TABLE IF NOT EXISTS daily_links (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  platform TEXT NOT NULL,
-  link TEXT NOT NULL,
-  subid TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime("now")),
-  UNIQUE(user_id, date, platform)
-);
-
-CREATE TABLE IF NOT EXISTS meta (
-  key TEXT PRIMARY KEY,
-  value TEXT
-);
-`);
-
-function upsertUser(userId) {
-  db.prepare("INSERT OR IGNORE INTO users (user_id) VALUES (?)").run(userId);
-}
-function getUser(userId) {
-  upsertUser(userId);
-  return db.prepare("SELECT * FROM users WHERE user_id = ?").get(userId);
-}
-function setNormalCoin(userId, amount) {
-  upsertUser(userId);
-  db.prepare("UPDATE users SET normal_coin = ?, updated_at = datetime('now') WHERE user_id = ?").run(amount, userId);
-}
-function addNormalCoin(userId, amount) {
-  upsertUser(userId);
-  db.prepare("UPDATE users SET normal_coin = normal_coin + ?, updated_at = datetime('now') WHERE user_id = ?").run(amount, userId);
-}
-function setVipCoin(userId, amount) {
-  upsertUser(userId);
-  db.prepare("UPDATE users SET vip_coin = ?, updated_at = datetime('now') WHERE user_id = ?").run(amount, userId);
-}
-function addVipCoin(userId, amount) {
-  upsertUser(userId);
-  db.prepare("UPDATE users SET vip_coin = vip_coin + ?, updated_at = datetime('now') WHERE user_id = ?").run(amount, userId);
-}
-function resetAllNormalCoins() {
-  db.prepare("UPDATE users SET normal_coin = 0, updated_at = datetime('now')").run();
-}
-
-// ======================= DISCORD BOT =======================
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
-});
-
-const commands = [
-  new SlashCommandBuilder()
-    .setName("getcoin")
-    .setDescription("Nhận coin thường"),
-  new SlashCommandBuilder()
-    .setName("checkcoin")
-    .setDescription("Xem số coin của bạn"),
-  new SlashCommandBuilder()
-    .setName("addcoin")
-    .setDescription("Admin cộng coin cho user")
-    .addUserOption(opt => opt.setName("target").setDescription("Người được cộng coin").setRequired(true))
-    .addIntegerOption(opt => opt.setName("amount").setDescription("Số coin").setRequired(true))
-    .addStringOption(opt => opt.setName("type").setDescription("Loại coin").addChoices(
-      { name: "normal", value: "normal" },
-      { name: "vip", value: "vip" }
-    ).setRequired(true))
-];
-
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-
-async function registerCommands() {
-  try {
-    console.log("Registering slash commands...");
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log("✅ Slash commands registered!");
-  } catch (err) {
-    console.error("❌ Error registering commands:", err);
-  }
-}
-
-client.on("ready", () => {
-  console.log(`🤖 Bot logged in as ${client.user.tag}`);
-});
-
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const { commandName, options, user } = interaction;
-
-  if (commandName === "getcoin") {
-    addNormalCoin(user.id, 10);
-    await interaction.reply(`🎁 Bạn đã nhận **10 coin thường**!`);
-  }
-
-  if (commandName === "checkcoin") {
-    const u = getUser(user.id);
-    await interaction.reply(`💰 Coin của bạn: \n- Normal: ${u.normal_coin}\n- VIP: ${u.vip_coin}`);
-  }
-
-  if (commandName === "addcoin") {
-    if (!process.env.ADMIN_IDS.split(",").includes(user.id)) {
-      await interaction.reply("❌ Bạn không có quyền dùng lệnh này.");
-      return;
-    }
-    const target = options.getUser("target");
-    const amount = options.getInteger("amount");
-    const type = options.getString("type");
-    if (type === "normal") addNormalCoin(target.id, amount);
-    if (type === "vip") addVipCoin(target.id, amount);
-    await interaction.reply(`✅ Đã cộng **${amount} ${type} coin** cho ${target.username}`);
-  }
-});
-
-// ======================= WEB SERVER =======================
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 10000;
+const TOKEN = process.env.BOT_TOKEN;
+const BASE_URL = `https://discord.com/api/v10`;
 
-app.get("/", (req, res) => {
-  res.send("🚀 Discord Coin Suite đang chạy!");
+// Kết nối SQLite
+const db = sqlite3("database.db");
+
+// Tạo bảng
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    coins INTEGER DEFAULT 0,
+    created_at DATETIME
+  )
+`).run();
+
+// Hàm gọi API Discord
+async function discordRequest(endpoint, options) {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    headers: {
+      "Authorization": `Bot ${TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    ...options,
+  });
+  return res.json();
+}
+
+// Đăng ký slash commands
+async function registerCommands() {
+  const commands = [
+    {
+      name: "getcoin",
+      description: "Nhận 10 coin miễn phí",
+    },
+    {
+      name: "checkcoin",
+      description: "Xem số coin hiện tại của bạn",
+    },
+  ];
+
+  await discordRequest(`/applications/${process.env.CLIENT_ID}/commands`, {
+    method: "PUT",
+    body: JSON.stringify(commands),
+  });
+
+  console.log("✅ Slash commands registered");
+}
+
+// Xử lý sự kiện từ Discord (interactions)
+app.post("/interactions", express.json(), async (req, res) => {
+  const { type, data, member } = req.body;
+
+  if (type === 1) {
+    // Ping check
+    return res.send({ type: 1 });
+  }
+
+  if (type === 2) {
+    const userId = member.user.id;
+
+    if (data.name === "getcoin") {
+      // Thêm user nếu chưa tồn tại
+      db.prepare(`
+        INSERT OR IGNORE INTO users (id, coins, created_at) VALUES (?, ?, ?)
+      `).run(userId, 0, new Date().toISOString());
+
+      // Cộng coin
+      db.prepare("UPDATE users SET coins = coins + 10 WHERE id = ?").run(userId);
+
+      return res.send({
+        type: 4,
+        data: { content: `🎉 Bạn vừa nhận được **10 coin**!` },
+      });
+    }
+
+    if (data.name === "checkcoin") {
+      const row = db.prepare("SELECT coins FROM users WHERE id = ?").get(userId);
+      const coins = row ? row.coins : 0;
+
+      return res.send({
+        type: 4,
+        data: { content: `💰 Bạn đang có **${coins} coin**.` },
+      });
+    }
+  }
 });
 
-app.post("/api/callback", (req, res) => {
-  const { user_id, coins } = req.body;
-  if (!user_id || !coins) return res.status(400).json({ error: "Thiếu dữ liệu" });
-  addNormalCoin(user_id, coins);
-  res.json({ success: true, message: `Cộng ${coins} coin cho user ${user_id}` });
+// Cron job (ví dụ mỗi ngày reset coin)
+cron.schedule("0 0 * * *", () => {
+  console.log("⏰ Reset coin hằng ngày...");
+  db.prepare("UPDATE users SET coins = 0").run();
 });
 
-// ======================= CRON JOB =======================
-cron.schedule("0 0 * * 1", () => {
-  console.log("🔄 Reset normal coin (thứ 2 hàng tuần)");
-  resetAllNormalCoins();
+// Khởi chạy server
+app.listen(PORT, async () => {
+  console.log(`🚀 Bot is running on port ${PORT}`);
+  await registerCommands();
 });
-
-// ======================= START =======================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🌐 Web server chạy tại http://localhost:${PORT}`);
-});
-
-registerCommands();
-client.login(process.env.DISCORD_TOKEN);

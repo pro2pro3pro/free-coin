@@ -1,17 +1,16 @@
 {
   "name": "discord-coin-suite",
   "version": "1.0.0",
-  "description": "Discord bot + coin system",
+  "description": "Discord bot nhận và check coin",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.15.3",
-    "dotenv": "^16.4.5",
+    "better-sqlite3": "^9.4.0",
     "express": "^4.19.2",
     "node-cron": "^3.0.3",
-    "better-sqlite3": "^9.4.0"
+    "node-fetch": "^3.3.2"
   }
 }
